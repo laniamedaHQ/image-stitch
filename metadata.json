@@ -1,0 +1,5 @@
+{
+  "name": "laniameda",
+  "description": "A smart image workspace for cropping, locking, editing, and stitching images for AI workflows.",
+  "requestFramePermissions": []
+}

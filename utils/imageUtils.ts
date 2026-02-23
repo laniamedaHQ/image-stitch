@@ -1,4 +1,4 @@
-import { CropRegion, ImageLayer } from '../types';
+import { CropRegion, ImageLayer, SmartStitchImage, SmartStitchLayoutItem } from '../types';
 
 /**
  * Loads an image from a source string.
@@ -73,6 +73,121 @@ export const generateCompositeImage = async (layer: ImageLayer): Promise<string>
     }
   }
 
+  return canvas.toDataURL('image/png');
+};
+
+/**
+ * Loads a File object and returns a SmartStitchImage with dataUrl + dimensions.
+ */
+export const loadImageFile = (file: File): Promise<SmartStitchImage> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        resolve({
+          id: Math.random().toString(36).substring(2, 9),
+          file,
+          dataUrl,
+          width: img.width,
+          height: img.height,
+        });
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * Generates a justified-row layout stitch (Google Photos style).
+ * Returns a PNG data URL.
+ */
+export const generateSmartStitch = async (
+  images: SmartStitchImage[],
+  settings: { containerWidth: number; targetRowHeight: number; spacing: number; backgroundColor: string }
+): Promise<string> => {
+  if (images.length === 0) return '';
+
+  const { containerWidth, targetRowHeight, spacing, backgroundColor } = settings;
+
+  // Build rows based on aspect ratios
+  let rows: { img: SmartStitchImage; aspectRatio: number; scaledWidth: number }[][] = [];
+  let currentRow: { img: SmartStitchImage; aspectRatio: number; scaledWidth: number }[] = [];
+  let currentWidth = 0;
+
+  for (const image of images) {
+    const aspectRatio = image.width / image.height;
+    const scaledWidth = targetRowHeight * aspectRatio;
+
+    currentRow.push({ img: image, aspectRatio, scaledWidth });
+    currentWidth += scaledWidth;
+
+    const totalWidthWithSpacing = currentWidth + (currentRow.length - 1) * spacing;
+    if (totalWidthWithSpacing >= containerWidth) {
+      rows.push(currentRow);
+      currentRow = [];
+      currentWidth = 0;
+    }
+  }
+  if (currentRow.length > 0) {
+    rows.push(currentRow);
+  }
+
+  // Calculate layout positions
+  const layout: SmartStitchLayoutItem[] = [];
+  let y = spacing;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const isLastRow = i === rows.length - 1;
+    const rowAspectRatio = row.reduce((sum, item) => sum + item.aspectRatio, 0);
+    const availableWidth = containerWidth - spacing * 2 - (row.length - 1) * spacing;
+
+    let rowHeight: number;
+    if (isLastRow && row.length > 0 && rowAspectRatio < (availableWidth / targetRowHeight) * 0.6) {
+      rowHeight = targetRowHeight;
+    } else {
+      rowHeight = availableWidth / rowAspectRatio;
+    }
+
+    let x = spacing;
+    for (const item of row) {
+      const width = rowHeight * item.aspectRatio;
+      layout.push({ img: item.img, x, y, width, height: rowHeight });
+      x += width + spacing;
+    }
+    y += rowHeight + spacing;
+  }
+
+  const totalHeight = y;
+
+  // Draw to canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = containerWidth;
+  canvas.height = totalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const drawPromises = layout.map(
+    (item) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, item.x, item.y, item.width, item.height);
+          resolve();
+        };
+        img.src = item.img.dataUrl;
+      })
+  );
+
+  await Promise.all(drawPromises);
   return canvas.toDataURL('image/png');
 };
 

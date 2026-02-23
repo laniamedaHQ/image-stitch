@@ -32,3 +32,19 @@ export interface StitchItem {
   layerId: string; // Can be Layer ID or Group ID
   cropId: string;
 }
+
+export interface SmartStitchImage {
+  id: string;
+  file: File;
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+export interface SmartStitchLayoutItem {
+  img: SmartStitchImage;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}

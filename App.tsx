@@ -1,14 +1,18 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ImageCropper from './components/ImageCropper';
 import StitchView from './views/StitchView';
+import SmartStitchView from './views/SmartStitchView';
+import ColorExplorerView from './views/ColorExplorerView';
 import { generateStitchedCanvas, cropImage, generateCompositeImage } from './utils/imageUtils';
 import { ImageLayer, StitchItem, AssetGroup, CropRegion } from './types';
-import { 
-  Plus, 
+import {
+  Plus,
   BoxSelect,
   Hexagon,
   Settings2,
   LayoutGrid,
+  Layers,
+  Palette,
   ChevronRight,
   ChevronDown,
   Sun,
@@ -34,7 +38,7 @@ import {
 } from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'editor' | 'stitch'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'stitch' | 'smartStitch' | 'colors'>('editor');
   
   // Selection & Navigation
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null); // Can be LayerID or GroupID
@@ -651,11 +655,23 @@ function App() {
             icon={<BoxSelect size={22} strokeWidth={1.5} />}
             label="Canvas"
           />
-          <NavButton 
-            active={activeTab === 'stitch'} 
+          <NavButton
+            active={activeTab === 'stitch'}
             onClick={() => setActiveTab('stitch')}
             icon={<LayoutGrid size={22} strokeWidth={1.5} />}
             label="Manual Stitch"
+          />
+          <NavButton
+            active={activeTab === 'smartStitch'}
+            onClick={() => setActiveTab('smartStitch')}
+            icon={<Layers size={22} strokeWidth={1.5} />}
+            label="Smart Stitch"
+          />
+          <NavButton
+            active={activeTab === 'colors'}
+            onClick={() => setActiveTab('colors')}
+            icon={<Palette size={22} strokeWidth={1.5} />}
+            label="Colors"
           />
         </nav>
 
@@ -685,6 +701,7 @@ function App() {
            </div>
         )}
 
+        {(activeTab === 'editor' || activeTab === 'stitch') && (
         <header className="absolute top-0 left-0 right-0 h-20 flex items-center justify-between px-10 z-10 pointer-events-none">
           <div className="pointer-events-auto flex flex-col">
              <div className="flex items-center gap-2">
@@ -695,7 +712,7 @@ function App() {
                 {activeTab === 'editor' ? (activeGroup ? activeGroup.name : (activeLayer ? activeLayer.name : 'The Workstation')) : 'Manual Assembly'}
              </h1>
           </div>
-          
+
           {/* Context Info */}
           {activeTab === 'editor' && (
              <div className="pointer-events-auto bg-surface border border-border px-4 py-2 flex items-center gap-3 shadow-sm transition-colors duration-300">
@@ -707,9 +724,10 @@ function App() {
              </div>
           )}
         </header>
+        )}
 
-        <div className="flex-1 w-full h-full pt-20 px-0 relative">
-           <div className="absolute inset-0 grid-bg pointer-events-none z-0"></div>
+        <div className={`flex-1 w-full h-full ${activeTab === 'editor' || activeTab === 'stitch' ? 'pt-20' : ''} px-0 relative`}>
+           {(activeTab === 'editor' || activeTab === 'stitch') && <div className="absolute inset-0 grid-bg pointer-events-none z-0"></div>}
 
            {activeTab === 'editor' ? (
              activeGroup ? (
@@ -742,13 +760,18 @@ function App() {
                    </div>
                 </div>
              )
-           ) : (
+           ) : activeTab === 'stitch' ? (
              <StitchView layers={layers} groups={groups} stitchItems={stitchItems} setStitchItems={setStitchItems} />
+           ) : activeTab === 'smartStitch' ? (
+             <SmartStitchView />
+           ) : (
+             <ColorExplorerView />
            )}
         </div>
       </main>
 
-      {/* --- RIGHT PANEL (LIBRARY) --- */}
+      {/* --- RIGHT PANEL (LIBRARY) — hidden on self-contained views --- */}
+      {(activeTab === 'editor' || activeTab === 'stitch') && (
       <aside className="w-80 bg-background border-l border-border flex flex-col z-20 shadow-sharp transition-colors duration-300">
         
         {/* Library Header */}
@@ -929,6 +952,7 @@ function App() {
              </div>
         </div>
       </aside>
+      )}
 
     </div>
   );

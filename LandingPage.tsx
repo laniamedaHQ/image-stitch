@@ -649,7 +649,7 @@ function HowItWorksSection() {
   const steps = [
     { num: '01', title: 'Import', desc: 'Drag your AI-generated images into the browser. No uploads, no servers \u2014 everything stays on your machine.', icon: Upload, color: '#FF552E' },
     { num: '02', title: 'Augment', desc: 'Crop regions, lock edit positions, auto-stitch reference sheets, explore palettes. One workspace for your entire AI pipeline.', icon: Scissors, color: '#F59E0B' },
-    { num: '03', title: 'Export', desc: 'One-click PNG export. Paste directly back into Midjourney, DALL-E, Flux, or any diffusion model.', icon: Download, color: '#06B6D4' },
+    { num: '03', title: 'Export', desc: 'One-click PNG export. Paste directly back into Midjourney, GPT-4o Images, Ideogram, or any AI image model.', icon: Download, color: '#06B6D4' },
   ];
 
   return (
@@ -975,7 +975,7 @@ function TestimonialsSection() {
     {
       quote: "I was tab-switching to Figma every time I needed a Midjourney reference sheet. Now I drag my generations in, auto-stitch, and paste back. 10 minutes down to 10 seconds.",
       name: 'Sarah K.',
-      role: 'AI Artist \u2014 Midjourney & Flux',
+      role: 'AI Artist \u2014 Midjourney & Ideogram',
       initials: 'SK',
       gradient: 'linear-gradient(135deg, #FF552E, #F59E0B)',
       glow: 'rgba(255,85,46,0.15)',
@@ -989,7 +989,7 @@ function TestimonialsSection() {
       glow: 'rgba(6,182,212,0.15)',
     },
     {
-      quote: "I generate 50+ images a day across DALL-E and Flux. Laniameda is the only tool that fits how I actually work \u2014 fast, local, no friction between me and the model.",
+      quote: "I generate 50+ images a day across Midjourney and Ideogram. Laniameda is the only tool that fits how I actually work \u2014 fast, local, no friction between me and the model.",
       name: 'Alex R.',
       role: 'Prompt Engineer & AI Content Creator',
       initials: 'AR',
@@ -1098,7 +1098,7 @@ function BuiltForSection() {
     },
     {
       title: 'Prompt Engineers',
-      desc: 'You iterate across DALL-E, Flux, and Stable Diffusion. You need a workspace that keeps up with your generation speed.',
+      desc: 'You iterate across Midjourney, Ideogram, and Firefly. You need a workspace that keeps up with your generation speed.',
       color: '#8B5CF6',
       icon: Zap,
     },
@@ -1180,7 +1180,7 @@ function FAQSection() {
     },
     {
       q: 'Does it work with tools other than Midjourney?',
-      a: "Yes. The precision crop workflow was designed for Midjourney's diffusion behavior, but stitching and color tools work across your entire AI pipeline \u2014 DALL-E 3, Flux, Stable Diffusion, Leonardo AI, ComfyUI, or even non-AI use cases.",
+      a: "Yes. The precision crop workflow was designed for Midjourney's diffusion behavior, but stitching and color tools work across your entire AI pipeline \u2014 GPT-4o Images, Ideogram 3, Adobe Firefly, Leonardo AI, ComfyUI, or even non-AI use cases.",
     },
     {
       q: 'How does this fit into my existing AI workflow?',
@@ -1458,7 +1458,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
             <FadeSection delay={0.2}>
               <p className="text-[#a1a1a1] text-base md:text-lg max-w-md leading-relaxed mb-8">
-                The companion workspace that slots between you and the model. Precision crop-and-stitch for Midjourney. One-click reference sheets for DALL-E and Flux. Real-time palette exploration. Purpose-built to augment how AI creators actually work.
+                The companion workspace that slots between you and the model. Precision crop-and-stitch for Midjourney. One-click reference sheets for Ideogram and Firefly. Real-time palette exploration. Purpose-built to augment how AI creators actually work.
               </p>
             </FadeSection>
 
@@ -1516,7 +1516,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
           }} />
           <div className="relative max-w-[1400px] mx-auto flex items-center justify-center gap-6 md:gap-10 py-5 px-6">
             {[
-              { text: 'Works with Midjourney, DALL-E, Flux & more', color: '#FF552E' },
+              { text: 'Works with Midjourney, Ideogram, Firefly & more', color: '#FF552E' },
               { text: 'Zero Install', color: '#06B6D4' },
               { text: 'Your Images Never Leave Your Browser', color: '#8B5CF6' },
             ].map((item, i) => (
@@ -1540,9 +1540,9 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             <div className="flex flex-wrap items-center justify-center gap-x-8 md:gap-x-12 gap-y-3">
               {[
                 { name: 'Midjourney', color: '#FF552E' },
-                { name: 'DALL-E 3', color: '#06B6D4' },
-                { name: 'Flux', color: '#8B5CF6' },
-                { name: 'Stable Diffusion', color: '#F59E0B' },
+                { name: 'GPT-4o Images', color: '#06B6D4' },
+                { name: 'Ideogram 3', color: '#8B5CF6' },
+                { name: 'Adobe Firefly', color: '#F59E0B' },
                 { name: 'Leonardo AI', color: '#EC4899' },
                 { name: 'ComfyUI', color: '#10B981' },
               ].map((tool) => (

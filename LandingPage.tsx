@@ -5,6 +5,7 @@ import {
   Check, X, Star, Upload, Download, Scissors, Zap,
   ChevronDown, AlertTriangle, Hexagon, Moon, Settings2, Plus
 } from 'lucide-react';
+import { BackgroundPlus } from '@/components/ui/background-plus';
 
 interface LandingPageProps {
   onEnter: () => void;
@@ -654,6 +655,13 @@ function HowItWorksSection() {
 
   return (
     <section className="relative py-24 md:py-32 overflow-hidden" style={{ borderBottom: '1px solid #262626' }}>
+      {/* Plus pattern background */}
+      <BackgroundPlus
+        plusColor="#FF552E"
+        plusSize={80}
+        fade={true}
+        className="opacity-[0.03] pointer-events-none"
+      />
       {/* Decorative gradient orb */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] pointer-events-none" style={{
         background: 'radial-gradient(ellipse, rgba(255,85,46,0.06) 0%, rgba(245,158,11,0.03) 40%, transparent 70%)',
@@ -1001,6 +1009,13 @@ function TestimonialsSection() {
   return (
     <FadeSection>
       <section className="relative py-24 md:py-32 overflow-hidden">
+        {/* Plus pattern background */}
+        <BackgroundPlus
+          plusColor="#06B6D4"
+          plusSize={90}
+          fade={true}
+          className="opacity-[0.03] pointer-events-none"
+        />
         {/* Gradient top border */}
         <div className="absolute top-0 left-0 right-0 h-px" style={{
           background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.3), rgba(255,85,46,0.3), transparent)',
@@ -1113,6 +1128,13 @@ function BuiltForSection() {
   return (
     <FadeSection>
       <section className="relative py-24 md:py-32 overflow-hidden" style={{ borderBottom: '1px solid #262626' }}>
+        {/* Plus pattern background */}
+        <BackgroundPlus
+          plusColor="#8B5CF6"
+          plusSize={100}
+          fade={true}
+          className="opacity-[0.025] pointer-events-none"
+        />
         <div className="relative max-w-[1200px] mx-auto px-6 md:px-12 lg:px-16">
           <div className="text-center mb-16">
             <p className="font-mono text-xs tracking-[0.2em] uppercase mb-4" style={{

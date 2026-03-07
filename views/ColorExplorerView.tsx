@@ -1,880 +1,452 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, ArrowRight, Sparkles, Palette, Type, Layout, Loader2, Check, Copy, Download, Wand2, Bot, Lightbulb } from 'lucide-react';
-import { GeneratedBrand, BrandGenerationRequest } from '../types/brand';
-import { generateBrand, generateBrandVariations } from '../services/brandAgent';
+import React, { useState, useCallback } from 'react';
+import { RefreshCw, Copy, Check, Lock, Sparkles, ChevronRight } from 'lucide-react';
 
-// --- 21st.dev Style Components ---
+// --- Color Naming Engine ---
 
-const Button = ({ 
-  children, 
-  onClick, 
-  variant = 'primary', 
-  size = 'md', 
-  disabled = false,
-  className = '',
-  icon: Icon
-}: { 
-  children: React.ReactNode; 
-  onClick?: () => void; 
-  variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-  className?: string;
-  icon?: React.ComponentType<{ size?: number }>;
-}) => {
-  const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-50 disabled:cursor-not-allowed';
-  
-  const variants = {
-    primary: 'bg-accent text-white hover:bg-accent/90 shadow-sm hover:shadow-md active:scale-[0.98]',
-    secondary: 'bg-surface text-primary border border-border hover:bg-accent/5 hover:border-accent/30 active:scale-[0.98]',
-    ghost: 'bg-transparent text-secondary hover:text-primary hover:bg-surface',
-    outline: 'bg-transparent text-primary border border-border hover:bg-surface hover:border-accent/30'
+const COLOR_NAMES: Record<string, [number, number][]> = {
+  // [hue_min, hue_max] ranges mapped to names by lightness/saturation
+  red: [[350, 360], [0, 15]],
+  orange: [[15, 45]],
+  amber: [[40, 55]],
+  yellow: [[50, 70]],
+  lime: [[70, 90]],
+  green: [[90, 150]],
+  teal: [[150, 180]],
+  cyan: [[180, 200]],
+  blue: [[200, 250]],
+  indigo: [[230, 260]],
+  violet: [[260, 290]],
+  purple: [[270, 300]],
+  fuchsia: [[290, 320]],
+  pink: [[320, 350]],
+};
+
+const LIGHT_PREFIXES = ['Soft', 'Pale', 'Misty', 'Pearl', 'Powder', 'Cotton', 'Cream', 'Cloud', 'Silk', 'Frost'];
+const MID_PREFIXES = ['Warm', 'Deep', 'Rich', 'Royal', 'Bold', 'Vivid', 'True', 'Classic', 'Pure', 'Bright'];
+const DARK_PREFIXES = ['Dark', 'Midnight', 'Deep', 'Shadow', 'Dusky', 'Charcoal', 'Storm', 'Ember', 'Steel', 'Iron'];
+const NEUTRAL_NAMES_LIGHT = ['Snow White', 'Ivory', 'Alabaster', 'Bone', 'Vanilla', 'Cream', 'Pearl', 'Linen', 'Cotton', 'Ghost White'];
+const NEUTRAL_NAMES_MID = ['Silver', 'Pewter', 'Dove', 'Ash', 'Fog', 'Slate', 'Stone', 'Cement', 'Smoke', 'Flint'];
+const NEUTRAL_NAMES_DARK = ['Charcoal', 'Obsidian', 'Graphite', 'Onyx', 'Iron', 'Coal', 'Jet', 'Raven', 'Ink', 'Void'];
+
+const HUE_NOUNS: Record<string, string[]> = {
+  red: ['Coral', 'Ruby', 'Crimson', 'Scarlet', 'Vermillion', 'Cherry', 'Flame', 'Poppy'],
+  orange: ['Tangerine', 'Copper', 'Apricot', 'Amber', 'Sienna', 'Peach', 'Rust', 'Terracotta'],
+  amber: ['Honey', 'Gold', 'Marigold', 'Saffron', 'Mustard', 'Butterscotch', 'Topaz'],
+  yellow: ['Lemon', 'Canary', 'Sunshine', 'Buttercup', 'Daffodil', 'Primrose', 'Citrus'],
+  lime: ['Chartreuse', 'Apple', 'Spring', 'Pistachio', 'Kiwi', 'Pear', 'Lime'],
+  green: ['Sage', 'Emerald', 'Forest', 'Moss', 'Olive', 'Jade', 'Fern', 'Clover'],
+  teal: ['Teal', 'Aqua', 'Lagoon', 'Oasis', 'Sea Mist', 'Seafoam', 'Verdigris'],
+  cyan: ['Cyan', 'Cerulean', 'Arctic', 'Ice', 'Pool', 'Glacier', 'Breeze'],
+  blue: ['Azure', 'Cobalt', 'Ocean', 'Sapphire', 'Sky', 'Marine', 'Denim', 'Horizon'],
+  indigo: ['Indigo', 'Navy', 'Dusk', 'Twilight', 'Bluebell', 'Baltic', 'Starlight'],
+  violet: ['Violet', 'Amethyst', 'Heather', 'Wisteria', 'Iris', 'Periwinkle', 'Thistle'],
+  purple: ['Plum', 'Grape', 'Mauve', 'Mulberry', 'Orchid', 'Boysenberry', 'Lavender'],
+  fuchsia: ['Fuchsia', 'Magenta', 'Berry', 'Raspberry', 'Hibiscus', 'Peony', 'Carnation'],
+  pink: ['Rose', 'Blush', 'Salmon', 'Flamingo', 'Petal', 'Bubblegum', 'Carnation'],
+};
+
+function hexToHSL(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? 'rgba(0,0,0,0.82)' : 'rgba(255,255,255,0.92)';
+}
+
+function getContrastColorSubtle(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)';
+}
+
+function generateColorName(hex: string, seed: number = 0): string {
+  const [h, s, l] = hexToHSL(hex);
+
+  // Neutrals (very low saturation)
+  if (s < 12) {
+    if (l > 85) return NEUTRAL_NAMES_LIGHT[seed % NEUTRAL_NAMES_LIGHT.length];
+    if (l > 40) return NEUTRAL_NAMES_MID[seed % NEUTRAL_NAMES_MID.length];
+    return NEUTRAL_NAMES_DARK[seed % NEUTRAL_NAMES_DARK.length];
+  }
+
+  // Find hue family
+  let hueFamily = 'red';
+  for (const [family, ranges] of Object.entries(COLOR_NAMES)) {
+    for (const [min, max] of ranges) {
+      if (h >= min && h < max) {
+        hueFamily = family;
+        break;
+      }
+    }
+  }
+
+  const nouns = HUE_NOUNS[hueFamily] || HUE_NOUNS.blue;
+  const noun = nouns[(seed + Math.floor(h / 30)) % nouns.length];
+
+  // Pick prefix by lightness
+  if (l > 70) {
+    const prefix = LIGHT_PREFIXES[(seed + Math.floor(s / 10)) % LIGHT_PREFIXES.length];
+    return `${prefix} ${noun}`;
+  }
+  if (l > 35) {
+    const prefix = MID_PREFIXES[(seed + Math.floor(s / 10)) % MID_PREFIXES.length];
+    return `${prefix} ${noun}`;
+  }
+  const prefix = DARK_PREFIXES[(seed + Math.floor(s / 10)) % DARK_PREFIXES.length];
+  return `${prefix} ${noun}`;
+}
+
+// --- Palette Generation ---
+
+interface PaletteColor {
+  key: string;
+  hex: string;
+  name: string;
+  role: string;
+}
+
+function generateHarmoniousPalette(): PaletteColor[] {
+  const baseHue = Math.random() * 360;
+
+  // Pick a harmony strategy
+  const strategies = ['complementary', 'analogous', 'triadic', 'split'] as const;
+  const strategy = strategies[Math.floor(Math.random() * strategies.length)];
+
+  let hues: number[];
+  switch (strategy) {
+    case 'complementary':
+      hues = [baseHue, (baseHue + 180) % 360, (baseHue + 30) % 360, (baseHue + 210) % 360];
+      break;
+    case 'analogous':
+      hues = [baseHue, (baseHue + 30) % 360, (baseHue + 60) % 360, (baseHue + 330) % 360];
+      break;
+    case 'triadic':
+      hues = [baseHue, (baseHue + 120) % 360, (baseHue + 240) % 360, (baseHue + 60) % 360];
+      break;
+    case 'split':
+      hues = [baseHue, (baseHue + 150) % 360, (baseHue + 210) % 360, (baseHue + 330) % 360];
+      break;
+  }
+
+  // Generate saturations and lightnesses with variety
+  const configs = [
+    { s: 50 + Math.random() * 35, l: 45 + Math.random() * 20 },
+    { s: 40 + Math.random() * 40, l: 40 + Math.random() * 25 },
+    { s: 55 + Math.random() * 30, l: 50 + Math.random() * 20 },
+    { s: 35 + Math.random() * 45, l: 35 + Math.random() * 35 },
+  ];
+
+  const roles = ['Primary', 'Secondary', 'Accent', 'Highlight'];
+
+  return hues.map((hue, i) => {
+    const { s, l } = configs[i];
+    const hex = hslToHex(hue, s, l);
+    return {
+      key: roles[i].toLowerCase(),
+      hex,
+      name: generateColorName(hex, i),
+      role: roles[i],
+    };
+  });
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
   };
-  
-  const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  };
-  
-  return (
-    <button 
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
-    >
-      {Icon && <Icon size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} />}
-      {children}
-    </button>
-  );
-};
+  return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+}
 
-const Card = ({ 
-  children, 
-  className = '',
-  hover = false,
-  padding = 'normal',
-  onClick,
-  style
-}: { 
-  children: React.ReactNode; 
-  className?: string;
-  hover?: boolean;
-  padding?: 'none' | 'normal' | 'large';
-  onClick?: () => void;
-  style?: React.CSSProperties;
-}) => {
-  const paddings = {
-    none: '',
-    normal: 'p-5',
-    large: 'p-8'
-  };
-  
-  return (
-    <div 
-      onClick={onClick}
-      style={style}
-      className={`bg-background border border-border rounded-xl transition-all duration-200 ${paddings[padding]} ${hover ? 'hover:border-accent/30 hover:shadow-sm cursor-pointer' : ''} ${className}`}
-    >
-      {children}
-    </div>
-  );
-};
+// --- Prompt Template ---
 
-const Input = ({
-  value,
-  onChange,
-  placeholder,
-  label,
-  type = 'text',
-  className = ''
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  label?: string;
-  type?: 'text' | 'textarea';
-  className?: string;
-}) => {
-  const inputStyles = 'w-full px-4 py-2.5 bg-surface border border-border rounded-lg text-sm text-primary placeholder:text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all';
-  
-  return (
-    <div className={`flex flex-col gap-1.5 ${className}`}>
-      {label && (
-        <label className="text-xs font-medium text-secondary">{label}</label>
-      )}
-      {type === 'textarea' ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={`${inputStyles} min-h-[80px] resize-none`}
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={inputStyles}
-        />
-      )}
-    </div>
-  );
-};
+function buildDesignPrompt(colors: PaletteColor[]): string {
+  const colorTokens = colors.map(c =>
+    `  --color-${c.key}: ${c.hex}; /* ${c.name} — use for ${c.role.toLowerCase()} elements */`
+  ).join('\n');
 
-const ColorInput = ({
-  value,
-  onChange,
-  label
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  label?: string;
-}) => {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {label && <label className="text-xs font-medium text-secondary">{label}</label>}
-      <div className="flex border border-border rounded-lg overflow-hidden h-11 focus-within:ring-2 focus-within:ring-accent/30 transition-all bg-surface">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-12 h-full cursor-pointer border-r border-border p-0 bg-surface"
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value.toUpperCase())}
-          className="flex-1 px-3 font-mono text-sm uppercase bg-surface outline-none text-primary font-medium"
-        />
-      </div>
-    </div>
-  );
-};
+  const colorDescriptions = colors.map(c =>
+    `- **${c.name}** (\`${c.hex}\`) → ${c.role}: Use this as the ${c.key} color throughout the design.`
+  ).join('\n');
 
-const Badge = ({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'accent' | 'outline' }) => {
-  const variants = {
-    default: 'bg-surface text-secondary border-border',
-    accent: 'bg-accent/10 text-accent border-accent/20',
-    outline: 'bg-transparent text-secondary border-border'
-  };
-  
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${variants[variant]}`}>
-      {children}
-    </span>
-  );
-};
+  return `## Design System — Color Palette
 
-// --- Google Fonts Loading ---
+Use the following curated color palette to create a cohesive, visually striking interface.
 
-const loadGoogleFont = (family: string, weights: number[]) => {
-  const link = document.createElement('link');
-  link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/\s+/g, '+')}:wght@${weights.join(';')}&display=swap`;
-  link.rel = 'stylesheet';
-  document.head.appendChild(link);
-};
+### CSS Custom Properties
+\`\`\`css
+:root {
+${colorTokens}
+}
+\`\`\`
 
-const STYLE_OPTIONS = [
-  { id: 'modern', label: 'Modern', description: 'Clean, contemporary' },
-  { id: 'bold', label: 'Bold', description: 'High contrast' },
-  { id: 'elegant', label: 'Elegant', description: 'Sophisticated' },
-  { id: 'playful', label: 'Playful', description: 'Fun, energetic' },
-  { id: 'minimal', label: 'Minimal', description: 'Ultra-clean' },
-  { id: 'classic', label: 'Classic', description: 'Timeless' },
-] as const;
+### Color Roles
+${colorDescriptions}
+
+### Usage Guidelines
+- Use the **Primary** color for main CTAs, active states, and key UI elements
+- Use the **Secondary** color for supporting elements, secondary buttons, and visual variety
+- Use the **Accent** color for highlights, badges, notifications, and emphasis
+- Use the **Highlight** color for hover states, selected items, and decorative elements
+- Ensure sufficient contrast ratios (WCAG AA minimum) for text on colored backgrounds
+- Pair bold colors with neutral backgrounds for readability
+
+### Suggested Neutral Companions
+- Background: #FFFFFF or #FAFAFA (light) / #0A0A0B or #111113 (dark)
+- Text: #1A1A2E (light mode) / #E8E8ED (dark mode)
+- Border: #E2E2E7 (light) / #2A2A2E (dark)
+`;
+}
+
+// --- Main Component ---
 
 export default function ColorExplorerView() {
-  // --- ORIGINAL COLOR EXPLORER STATE ---
-  const [baseColor, setBaseColor] = useState('#FF552E');
-  const [palette, setPalette] = useState({
-    primary: '#FF552E',
-    secondary: '#3B82F6',
-    background: '#FFFFFF',
-    surface: '#FAFAFA',
-    text: '#09090B',
-    textMuted: '#71717A',
-    accent: '#F59E0B',
-    border: '#E4E4E7',
-  });
-  const [copiedColor, setCopiedColor] = useState<string | null>(null);
+  const [colors, setColors] = useState<PaletteColor[]>(() => generateHarmoniousPalette());
+  const [copied, setCopied] = useState<string | null>(null);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [isShuffling, setIsShuffling] = useState(false);
 
-  // --- AI BRAND AGENT STATE ---
-  const [prompt, setPrompt] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState<string>('modern');
-  const [industry, setIndustry] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedBrands, setGeneratedBrands] = useState<GeneratedBrand[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<GeneratedBrand | null>(null);
-  const [agentTab, setAgentTab] = useState<'colors' | 'typography' | 'preview'>('colors');
+  const handleRandomize = useCallback(() => {
+    setIsShuffling(true);
+    // Quick shuffle animation
+    setTimeout(() => {
+      setColors(generateHarmoniousPalette());
+      setIsShuffling(false);
+    }, 150);
+  }, []);
 
-  // Load fonts when brand is selected
-  useEffect(() => {
-    if (selectedBrand) {
-      const fonts = [selectedBrand.typography.heading, selectedBrand.typography.body];
-      if (selectedBrand.typography.accent) fonts.push(selectedBrand.typography.accent);
-      if (selectedBrand.typography.mono) fonts.push(selectedBrand.typography.mono);
-      
-      fonts.forEach(font => {
-        if (!font.family.includes('Helvetica') && !font.family.includes('SF Mono') && !font.family.includes('Arial')) {
-          loadGoogleFont(font.family, font.weights);
-        }
-      });
-    }
-  }, [selectedBrand]);
-
-  // --- ORIGINAL COLOR EXPLORER FUNCTIONS ---
-  const generateRandomPalette = () => {
-    const randomHex = () =>
-      '#' +
-      Math.floor(Math.random() * 16777215)
-        .toString(16)
-        .padStart(6, '0')
-        .toUpperCase();
-    
-    const primary = randomHex();
-    const secondary = randomHex();
-    
-    setPalette({
-      primary,
-      secondary,
-      background: '#FFFFFF',
-      surface: '#FAFAFA',
-      text: '#09090B',
-      textMuted: '#71717A',
-      accent: randomHex(),
-      border: '#E4E4E7',
-    });
-    setBaseColor(primary);
-  };
-
-  const handleBaseColorChange = (newColor: string) => {
-    setBaseColor(newColor);
-    if (/^#[0-9A-F]{6}$/i.test(newColor)) {
-      setPalette(p => ({ ...p, primary: newColor.toUpperCase() }));
-    }
-  };
-
-  const copyColor = (hex: string) => {
+  const handleCopyHex = useCallback((hex: string) => {
     navigator.clipboard.writeText(hex);
-    setCopiedColor(hex);
-    setTimeout(() => setCopiedColor(null), 1500);
-  };
+    setCopied(hex);
+    setTimeout(() => setCopied(null), 1500);
+  }, []);
 
-  // --- AI AGENT FUNCTIONS ---
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
-    
-    setIsGenerating(true);
-    try {
-      const request: BrandGenerationRequest = {
-        prompt: prompt,
-        style: selectedStyle as any,
-        industry: industry || undefined
-      };
-      
-      const brands = await generateBrandVariations(request, 3);
-      setGeneratedBrands(brands);
-      setSelectedBrand(brands[0]);
-    } catch (error) {
-      console.error('Failed to generate brand:', error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const exportBrand = () => {
-    if (!selectedBrand) return;
-    const dataStr = JSON.stringify(selectedBrand, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${selectedBrand.name.toLowerCase().replace(/\s+/g, '-')}-brand.json`;
-    link.click();
-  };
+  const handleCopyPrompt = useCallback(() => {
+    const prompt = buildDesignPrompt(colors);
+    navigator.clipboard.writeText(prompt);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2500);
+  }, [colors]);
 
   return (
     <div className="w-full h-full overflow-auto relative animate-fade-in">
       <div className="absolute inset-0 grid-bg pointer-events-none z-0"></div>
 
-      <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-10">
-        
-        {/* --- HEADER --- */}
+      <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-10 py-8 md:py-12">
+
+        {/* Header */}
         <div className="mb-10">
           <span className="font-mono text-[10px] text-accent font-bold tracking-widest uppercase">Tool</span>
-          <h2 className="font-serif text-4xl text-primary mt-1 transition-colors duration-300">
-            Color Explorer & Brand Studio
-          </h2>
-          <p className="text-sm text-secondary mt-2 max-w-2xl">
-            Explore colors manually or let AI generate complete brand systems with structured design tokens.
+          <h2 className="font-serif text-4xl text-primary mt-1">Color Palette Explorer</h2>
+          <p className="text-sm text-secondary mt-2 max-w-xl">
+            Discover harmonious color combinations. Copy the full design prompt for your AI design agent.
           </p>
         </div>
 
-        {/* --- SECTION 1: ORIGINAL COLOR EXPLORER --- */}
-        <section className="mb-16">
-          <div className="flex items-center gap-3 mb-6">
-            <Palette className="text-accent" size={20} />
-            <h3 className="font-serif text-xl text-primary">Color Palette Explorer</h3>
+        {/* Action Bar */}
+        <div className="flex flex-wrap items-center gap-3 mb-8">
+          <button
+            onClick={handleRandomize}
+            className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
+          >
+            <RefreshCw size={16} className={isShuffling ? 'animate-spin' : ''} />
+            Randomize
+          </button>
+
+          <button
+            onClick={handleCopyPrompt}
+            className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-surface text-primary border border-border text-sm font-medium rounded-lg hover:bg-accent/5 hover:border-accent/30 active:scale-[0.97] transition-all duration-200"
+          >
+            {promptCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+            {promptCopied ? 'Copied Prompt!' : 'Copy AI Prompt'}
+          </button>
+        </div>
+
+        {/* === COLOR SWATCHES — The Hero === */}
+        <div
+          className="grid gap-3 mb-8"
+          style={{
+            gridTemplateColumns: `repeat(${colors.length}, 1fr)`,
+          }}
+        >
+          {colors.map((color, i) => {
+            const textColor = getContrastColor(color.hex);
+            const subtleColor = getContrastColorSubtle(color.hex);
+
+            return (
+              <div
+                key={`${color.hex}-${i}`}
+                onClick={() => handleCopyHex(color.hex)}
+                className="relative group cursor-pointer rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-elevated active:scale-[0.99]"
+                style={{
+                  backgroundColor: color.hex,
+                  aspectRatio: '3 / 5',
+                  minHeight: '320px',
+                  opacity: isShuffling ? 0.4 : 1,
+                  transform: isShuffling ? 'scale(0.96)' : undefined,
+                  transition: 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                }}
+              >
+                {/* Color Name — centered */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
+                  <h3
+                    className="font-serif italic text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-center uppercase leading-tight"
+                    style={{ color: textColor }}
+                  >
+                    {color.name}
+                  </h3>
+
+                  {/* Hex Badge */}
+                  <div
+                    className="mt-4 px-3.5 py-1.5 rounded-full text-xs font-mono font-medium tracking-wider border transition-all duration-200"
+                    style={{
+                      color: textColor,
+                      borderColor: subtleColor,
+                      backgroundColor: `${textColor === 'rgba(0,0,0,0.82)' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)'}`,
+                    }}
+                  >
+                    {color.hex}
+                  </div>
+                </div>
+
+                {/* Copy indicator */}
+                <div
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  style={{ color: subtleColor }}
+                >
+                  {copied === color.hex ? (
+                    <Check size={18} />
+                  ) : (
+                    <Copy size={18} />
+                  )}
+                </div>
+
+                {/* Role label */}
+                <div
+                  className="absolute bottom-4 left-4 text-[10px] font-mono font-medium uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  style={{ color: subtleColor }}
+                >
+                  {color.role}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Palette Summary Bar */}
+        <div className="bg-background border border-border rounded-xl p-5 mb-16">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-medium text-secondary uppercase tracking-wider">Palette Tokens</h4>
+            <button
+              onClick={handleCopyPrompt}
+              className="text-xs text-accent hover:text-accent/80 font-medium flex items-center gap-1 transition-colors"
+            >
+              {promptCopied ? 'Copied!' : 'Copy full prompt'}
+              <ChevronRight size={12} />
+            </button>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Controls */}
-            <div className="space-y-4">
-              <Card>
-                <div className="space-y-4">
-                  <ColorInput
-                    label="Base Color"
-                    value={baseColor}
-                    onChange={handleBaseColorChange}
-                  />
-                  
-                  <Button 
-                    onClick={generateRandomPalette}
-                    variant="secondary"
-                    className="w-full"
-                    icon={RefreshCw}
-                  >
-                    Randomize Palette
-                  </Button>
+          <div className="flex flex-wrap gap-2">
+            {colors.map((color, i) => (
+              <button
+                key={i}
+                onClick={() => handleCopyHex(color.hex)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface border border-border/50 hover:border-accent/30 transition-all group"
+              >
+                <div
+                  className="w-5 h-5 rounded-md flex-shrink-0 border border-border/30"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <div className="text-left">
+                  <div className="text-xs font-medium text-primary capitalize">{color.key}</div>
+                  <div className="font-mono text-[10px] text-secondary">{color.hex}</div>
                 </div>
-              </Card>
-
-              {/* Palette Swatches */}
-              <Card padding="normal">
-                <h4 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">Current Palette</h4>
-                <div className="space-y-2">
-                  {Object.entries(palette).map(([name, hex]) => (
-                    <div
-                      key={name}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface cursor-pointer group transition-colors"
-                      onClick={() => copyColor(hex)}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-lg border border-border/50 flex-shrink-0"
-                        style={{ backgroundColor: hex }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-primary capitalize flex items-center gap-2">
-                          {name}
-                          {copiedColor === hex && <Check size={12} className="text-green-500" />}
-                        </div>
-                        <div className="font-mono text-xs text-secondary">{hex}</div>
-                      </div>
-                      <Copy size={14} className="text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-
-            {/* Right: Live Preview */}
-            <div className="lg:col-span-2">
-              <Card padding="large" className="h-full" style={{ backgroundColor: palette.background, color: palette.text }}>
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="accent">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5"></span>
-                      Live Preview
-                    </Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    {['Features', 'Pricing', 'About'].map((item) => (
-                      <span
-                        key={item}
-                        className="text-sm cursor-pointer hover:opacity-70 transition-opacity"
-                        style={{ color: palette.textMuted }}
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="max-w-xl">
-                  <h1
-                    className="text-5xl font-serif leading-tight mb-4"
-                    style={{ color: palette.primary }}
-                  >
-                    The Authenticity{' '}
-                    <span style={{ color: palette.secondary }}>Premium.</span>
-                  </h1>
-                  
-                  <p 
-                    className="text-base leading-relaxed mb-6"
-                    style={{ color: palette.textMuted }}
-                  >
-                    High contrast is essential for readability and accessibility. Test your palette against real
-                    content to ensure it works at every scale.
-                  </p>
-
-                  <div className="flex gap-3">
-                    <button
-                      className="px-5 py-2.5 rounded-lg font-medium text-sm transition-transform hover:-translate-y-0.5 flex items-center gap-2"
-                      style={{
-                        backgroundColor: palette.accent,
-                        color: palette.text,
-                      }}
-                    >
-                      Explore Now
-                      <ArrowRight size={16} />
-                    </button>
-                    <button
-                      className="px-5 py-2.5 rounded-lg font-medium text-sm transition-transform hover:-translate-y-0.5"
-                      style={{
-                        backgroundColor: palette.surface,
-                        color: palette.text,
-                        border: `1px solid ${palette.border}`,
-                      }}
-                    >
-                      Learn More
-                    </button>
-                  </div>
-                </div>
-
-                {/* Feature Cards */}
-                <div className="grid grid-cols-3 gap-4 mt-12">
-                  {[
-                    { title: 'Design', desc: 'Craft with care' },
-                    { title: 'Develop', desc: 'Build with speed' },
-                    { title: 'Deploy', desc: 'Ship with confidence' },
-                  ].map((feature, i) => (
-                    <div
-                      key={i}
-                      className="p-4 rounded-lg"
-                      style={{ 
-                        backgroundColor: palette.surface,
-                        border: `1px solid ${palette.border}`
-                      }}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-lg mb-3"
-                        style={{ backgroundColor: i === 0 ? palette.primary : i === 1 ? palette.secondary : palette.accent }}
-                      />
-                      <h3 className="font-semibold text-sm mb-1" style={{ color: palette.text }}>
-                        {feature.title}
-                      </h3>
-                      <p className="text-xs" style={{ color: palette.textMuted }}>
-                        {feature.desc}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
+                {copied === color.hex ? (
+                  <Check size={12} className="text-green-500 ml-1" />
+                ) : (
+                  <Copy size={12} className="text-secondary opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                )}
+              </button>
+            ))}
           </div>
-        </section>
+        </div>
 
         {/* Divider */}
         <div className="border-t border-border my-12"></div>
 
-        {/* --- SECTION 2: AI BRAND AGENT --- */}
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <Bot className="text-accent" size={20} />
-            <h3 className="font-serif text-xl text-primary">AI Brand Generator</h3>
-            <Badge variant="accent">Powered by an-sdk</Badge>
+        {/* === AI BRAND GENERATOR — Coming Soon === */}
+        <section className="mb-12">
+          <div
+            className="relative bg-background border border-border rounded-2xl p-8 md:p-12 overflow-hidden"
+          >
+            {/* Decorative gradient blur */}
+            <div
+              className="absolute -top-20 -right-20 w-64 h-64 rounded-full opacity-20 blur-3xl pointer-events-none"
+              style={{ background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)' }}
+            />
+            <div
+              className="absolute -bottom-20 -left-20 w-48 h-48 rounded-full opacity-10 blur-3xl pointer-events-none"
+              style={{ background: 'linear-gradient(135deg, #3B82F6, var(--color-accent))' }}
+            />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
+              <div className="flex-shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+                  <Sparkles size={24} className="text-accent" />
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="font-serif text-2xl text-primary">AI Brand Generator</h3>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-accent/10 text-accent border border-accent/20">
+                    <Lock size={10} />
+                    Coming Soon
+                  </span>
+                </div>
+                <p className="text-sm text-secondary max-w-xl leading-relaxed">
+                  Generate complete brand systems with AI — colors, typography, spacing, and design tokens,
+                  all structured and ready to export. Describe your vision and get a full design system in seconds.
+                </p>
+              </div>
+            </div>
+
+            {/* Teaser feature pills */}
+            <div className="relative z-10 flex flex-wrap gap-2 mt-6 md:ml-20">
+              {['Color Tokens', 'Typography Pairs', 'Spacing Scale', 'Border Radii', 'Shadow System', 'JSON Export'].map((feature) => (
+                <span
+                  key={feature}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-secondary border border-border"
+                >
+                  {feature}
+                </span>
+              ))}
+            </div>
           </div>
-
-          {/* AI Generation Panel */}
-          <Card className="mb-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Prompt Input */}
-              <div>
-                <Input
-                  label="Describe your brand vision"
-                  type="textarea"
-                  value={prompt}
-                  onChange={setPrompt}
-                  placeholder="e.g., A tech startup for sustainable energy, modern and trustworthy..."
-                />
-              </div>
-              
-              {/* Style & Industry */}
-              <div className="space-y-4">
-                <Input
-                  label="Industry (optional)"
-                  value={industry}
-                  onChange={setIndustry}
-                  placeholder="e.g., Healthcare, Finance, E-commerce..."
-                />
-                
-                <div>
-                  <label className="text-xs font-medium text-secondary block mb-2">Style Direction</label>
-                  <div className="flex flex-wrap gap-2">
-                    {STYLE_OPTIONS.map((style) => (
-                      <button
-                        key={style.id}
-                        onClick={() => setSelectedStyle(style.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                          selectedStyle === style.id
-                            ? 'bg-accent text-white border-accent'
-                            : 'bg-surface text-secondary border-border hover:border-accent/30 hover:text-primary'
-                        }`}
-                        title={style.description}
-                      >
-                        {style.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-border">
-              <Button 
-                onClick={handleGenerate}
-                disabled={isGenerating || !prompt.trim()}
-                size="lg"
-                className="w-full sm:w-auto"
-                icon={isGenerating ? Loader2 : Sparkles}
-              >
-                {isGenerating ? 'Generating Brand System...' : 'Generate Brand with AI'}
-              </Button>
-            </div>
-          </Card>
-
-          {/* Generated Brands Grid */}
-          {generatedBrands.length > 0 && (
-            <div className="mb-8">
-              <h4 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">
-                Generated Brand Systems
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {generatedBrands.map((brand, index) => (
-                  <Card
-                    key={index}
-                    hover
-                    onClick={() => setSelectedBrand(brand)}
-                    className={`${selectedBrand?.name === brand.name ? 'ring-2 ring-accent ring-offset-2 ring-offset-background' : ''}`}
-                    style={{ backgroundColor: brand.colors.background.hex }}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 
-                          className="font-semibold text-base mb-1"
-                          style={{ color: brand.colors.text.hex, fontFamily: brand.typography.heading.family }}
-                        >
-                          {brand.name}
-                        </h4>
-                        <p className="text-xs opacity-70" style={{ color: brand.colors.textMuted.hex }}>
-                          {brand.mood.slice(0, 3).join(' · ')}
-                        </p>
-                      </div>
-                      <div 
-                        className="w-8 h-8 rounded-full border-2"
-                        style={{ backgroundColor: brand.colors.primary.hex, borderColor: brand.colors.border.hex }}
-                      />
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[brand.colors.primary, brand.colors.secondary, brand.colors.accent, brand.colors.background].map((color, i) => (
-                        <div
-                          key={i}
-                          className="w-8 h-8 rounded-md border"
-                          style={{ backgroundColor: color.hex, borderColor: brand.colors.border.hex }}
-                          title={color.name}
-                        />
-                      ))}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Selected Brand Preview */}
-          {selectedBrand && (
-            <div className="space-y-6">
-              {/* Brand Header */}
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h4 
-                    className="text-2xl font-semibold mb-1"
-                    style={{ fontFamily: selectedBrand.typography.heading.family }}
-                  >
-                    {selectedBrand.name}
-                  </h4>
-                  <p className="text-sm text-secondary">{selectedBrand.description}</p>
-                </div>
-                <Button onClick={exportBrand} variant="secondary" icon={Download}>
-                  Export JSON
-                </Button>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex gap-1 p-1 bg-surface rounded-lg w-fit border border-border">
-                {[
-                  { id: 'colors', icon: Palette, label: 'Colors' },
-                  { id: 'typography', icon: Type, label: 'Typography' },
-                  { id: 'preview', icon: Layout, label: 'Preview' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setAgentTab(tab.id as any)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${
-                      agentTab === tab.id
-                        ? 'bg-background text-primary shadow-sm'
-                        : 'text-secondary hover:text-primary'
-                    }`}
-                  >
-                    <tab.icon size={16} />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab Content */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Panel - Tokens */}
-                <div className="lg:col-span-1 space-y-4">
-                  {agentTab === 'colors' && (
-                    <Card>
-                      <h4 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">
-                        Color Tokens
-                      </h4>
-                      <div className="space-y-2">
-                        {Object.entries(selectedBrand.colors).map(([key, color]) => (
-                          <div
-                            key={key}
-                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface cursor-pointer group transition-colors"
-                            onClick={() => copyColor(color.hex)}
-                          >
-                            <div
-                              className="w-10 h-10 rounded-lg border border-border/50 flex-shrink-0"
-                              style={{ backgroundColor: color.hex }}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-primary capitalize flex items-center gap-2">
-                                {key}
-                                {copiedColor === color.hex && <Check size={12} className="text-green-500" />}
-                              </div>
-                              <div className="font-mono text-xs text-secondary">{color.hex}</div>
-                            </div>
-                            <Copy size={14} className="text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
-
-                  {agentTab === 'typography' && (
-                    <Card className="space-y-4">
-                      <h4 className="text-xs font-medium text-secondary uppercase tracking-wider">
-                        Typography
-                      </h4>
-                      
-                      <div className="p-3 bg-surface rounded-lg">
-                        <div className="text-xs text-secondary mb-1">Heading</div>
-                        <div 
-                          className="text-lg font-semibold text-primary"
-                          style={{ fontFamily: selectedBrand.typography.heading.family }}
-                        >
-                          {selectedBrand.typography.heading.family}
-                        </div>
-                        <div className="text-xs text-secondary mt-1">
-                          Weights: {selectedBrand.typography.heading.weights.join(', ')}
-                        </div>
-                      </div>
-                      
-                      <div className="p-3 bg-surface rounded-lg">
-                        <div className="text-xs text-secondary mb-1">Body</div>
-                        <div 
-                          className="text-base text-primary"
-                          style={{ fontFamily: selectedBrand.typography.body.family }}
-                        >
-                          {selectedBrand.typography.body.family}
-                        </div>
-                        <div className="text-xs text-secondary mt-1">
-                          Weights: {selectedBrand.typography.body.weights.join(', ')}
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-border">
-                        <h5 className="text-xs font-medium text-secondary mb-3 uppercase tracking-wider">
-                          Design Tokens
-                        </h5>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-secondary">Border Radius (md)</span>
-                            <span className="font-mono text-primary">{selectedBrand.radii.md}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-secondary">Base Spacing</span>
-                            <span className="font-mono text-primary">{selectedBrand.spacing.unit}px</span>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
-
-                  {agentTab === 'preview' && (
-                    <Card>
-                      <h4 className="text-xs font-medium text-secondary mb-4 uppercase tracking-wider">
-                        Mood & Keywords
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedBrand.mood.map((mood, i) => (
-                          <Badge key={i} variant="outline">{mood}</Badge>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
-                </div>
-
-                {/* Right Panel - Live Preview */}
-                <div className="lg:col-span-2">
-                  <Card 
-                    padding="large" 
-                    className="h-full"
-                    style={{ 
-                      backgroundColor: selectedBrand.colors.background.hex,
-                      borderColor: selectedBrand.colors.border.hex
-                    }}
-                  >
-                    {/* Mock Landing Page */}
-                    <nav className="flex items-center justify-between mb-10">
-                      <div 
-                        className="text-xl font-bold"
-                        style={{ 
-                          color: selectedBrand.colors.text.hex,
-                          fontFamily: selectedBrand.typography.heading.family
-                        }}
-                      >
-                        {selectedBrand.name.split(' ')[0]}
-                      </div>
-                      <div className="flex gap-6">
-                        {['Features', 'Pricing', 'About'].map((item) => (
-                          <span
-                            key={item}
-                            className="text-sm cursor-pointer hover:opacity-70 transition-opacity"
-                            style={{ color: selectedBrand.colors.textMuted.hex }}
-                          >
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                      <button
-                        className="px-4 py-2 text-sm font-medium transition-transform hover:-translate-y-0.5"
-                        style={{ 
-                          backgroundColor: selectedBrand.colors.primary.hex,
-                          color: '#FFFFFF',
-                          borderRadius: selectedBrand.radii.md
-                        }}
-                      >
-                        Get Started
-                      </button>
-                    </nav>
-
-                    <div className="max-w-xl">
-                      <div
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-6"
-                        style={{ 
-                          backgroundColor: selectedBrand.colors.accent.hex,
-                          color: selectedBrand.colors.text.hex
-                        }}
-                      >
-                        <span 
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: selectedBrand.colors.text.hex }}
-                        ></span>
-                        New Release
-                      </div>
-                      
-                      <h1
-                        className="text-5xl font-bold leading-tight mb-6"
-                        style={{ 
-                          color: selectedBrand.colors.text.hex,
-                          fontFamily: selectedBrand.typography.heading.family
-                        }}
-                      >
-                        Build something{' '}
-                        <span style={{ color: selectedBrand.colors.primary.hex }}>amazing.</span>
-                      </h1>
-                      
-                      <p
-                        className="text-lg leading-relaxed mb-8"
-                        style={{ 
-                          color: selectedBrand.colors.textMuted.hex,
-                          fontFamily: selectedBrand.typography.body.family
-                        }}
-                      >
-                        Create stunning digital experiences with our comprehensive design system. 
-                        Beautiful colors, typography, and components that work together perfectly.
-                      </p>
-
-                      <div className="flex gap-4">
-                        <button
-                          className="px-6 py-3 font-medium transition-transform hover:-translate-y-0.5 flex items-center gap-2"
-                          style={{ 
-                            backgroundColor: selectedBrand.colors.primary.hex,
-                            color: '#FFFFFF',
-                            borderRadius: selectedBrand.radii.md,
-                            fontFamily: selectedBrand.typography.body.family
-                          }}
-                        >
-                          Start Building
-                          <ArrowRight size={18} />
-                        </button>
-                        <button
-                          className="px-6 py-3 font-medium transition-transform hover:-translate-y-0.5"
-                          style={{ 
-                            backgroundColor: selectedBrand.colors.surface.hex,
-                            color: selectedBrand.colors.text.hex,
-                            border: `1px solid ${selectedBrand.colors.border.hex}`,
-                            borderRadius: selectedBrand.radii.md,
-                            fontFamily: selectedBrand.typography.body.family
-                          }}
-                        >
-                          Learn More
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Feature Cards */}
-                    <div className="grid grid-cols-3 gap-4 mt-12">
-                      {[
-                        { title: 'Fast', desc: 'Lightning quick' },
-                        { title: 'Secure', desc: 'Enterprise grade' },
-                        { title: 'Scalable', desc: 'Grow with you' },
-                      ].map((feature, i) => (
-                        <div
-                          key={i}
-                          className="p-4 transition-transform hover:-translate-y-1"
-                          style={{ 
-                            backgroundColor: selectedBrand.colors.surface.hex,
-                            border: `1px solid ${selectedBrand.colors.border.hex}`,
-                            borderRadius: selectedBrand.radii.lg,
-                            boxShadow: selectedBrand.shadows.sm
-                          }}
-                        >
-                          <div
-                            className="w-8 h-8 rounded-lg mb-3"
-                            style={{ backgroundColor: selectedBrand.colors.secondary.hex }}
-                          />
-                          <h3
-                            className="font-semibold mb-1"
-                            style={{ 
-                              color: selectedBrand.colors.text.hex,
-                              fontFamily: selectedBrand.typography.heading.family
-                            }}
-                          >
-                            {feature.title}
-                          </h3>
-                          <p
-                            className="text-sm"
-                            style={{ color: selectedBrand.colors.textMuted.hex }}
-                          >
-                            {feature.desc}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          )}
         </section>
       </div>
     </div>

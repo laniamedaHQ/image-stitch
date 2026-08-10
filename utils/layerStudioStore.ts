@@ -26,6 +26,8 @@ export interface PersistedLayer {
   y: number;
   scale: number;
   rotation: number;
+  flipX?: boolean;
+  flipY?: boolean;
   assetId: string; // references a project asset
 }
 

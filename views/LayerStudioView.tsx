@@ -23,6 +23,8 @@ import {
   Paintbrush,
   Maximize,
   RotateCw,
+  FlipHorizontal,
+  FlipVertical,
   Layers as LayersIcon,
   Frame,
   Pipette,
@@ -216,6 +218,8 @@ interface CompLayer {
   y: number;
   scale: number;     // multiplier on the source image's natural size
   rotation: number;  // degrees
+  flipX?: boolean;   // mirrored left-right about its own center
+  flipY?: boolean;   // mirrored top-bottom about its own center
   assetId: string;   // references a shared project asset
 }
 
@@ -691,13 +695,14 @@ const LayerStudioView: React.FC = () => {
     w: number; h: number;    // layer size in doc px
     cx: number; cy: number;  // layer center in doc px
     rad: number;             // rotation in radians
+    flipX: boolean; flipY: boolean; // mirrored about the layer's own center
     mw: number; mh: number;  // mask size in mask px
     m: number;               // doc px → mask px
   }
 
   const frameFor = (
     iw: number, ih: number,
-    geom: { x: number; y: number; scale: number; rotation: number },
+    geom: { x: number; y: number; scale: number; rotation: number; flipX?: boolean; flipY?: boolean },
     mw: number, mh: number,
   ): LayerFrame => {
     const w = (iw * geom.scale) || 1, h = (ih * geom.scale) || 1;
@@ -706,6 +711,7 @@ const LayerStudioView: React.FC = () => {
       cx: geom.x + w / 2,
       cy: geom.y + h / 2,
       rad: (geom.rotation * Math.PI) / 180,
+      flipX: !!geom.flipX, flipY: !!geom.flipY,
       mw, mh,
       m: mw / w,
     };
@@ -723,9 +729,13 @@ const LayerStudioView: React.FC = () => {
   const docToMask = (f: LayerFrame, x: number, y: number) => {
     const dx = x - f.cx, dy = y - f.cy;
     const c = Math.cos(-f.rad), s = Math.sin(-f.rad);
+    let lx = dx * c - dy * s;
+    let ly = dx * s + dy * c;
+    if (f.flipX) lx = -lx;
+    if (f.flipY) ly = -ly;
     return {
-      x: (dx * c - dy * s) * f.m + f.mw / 2,
-      y: (dx * s + dy * c) * f.m + f.mh / 2,
+      x: lx * f.m + f.mw / 2,
+      y: ly * f.m + f.mh / 2,
     };
   };
 
@@ -733,6 +743,7 @@ const LayerStudioView: React.FC = () => {
   const useDocToMask = (ctx: CanvasRenderingContext2D, f: LayerFrame) => {
     ctx.translate(f.mw / 2, f.mh / 2);
     ctx.scale(f.m, f.m);
+    ctx.scale(f.flipX ? -1 : 1, f.flipY ? -1 : 1);
     ctx.rotate(-f.rad);
     ctx.translate(-f.cx, -f.cy);
   };
@@ -802,10 +813,11 @@ const LayerStudioView: React.FC = () => {
       lctx.save();
       lctx.translate(cx, cy);
       lctx.rotate((layer.rotation * Math.PI) / 180);
+      lctx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
       lctx.imageSmoothingQuality = 'high';
       lctx.drawImage(img, (-w / 2) * k, (-h / 2) * k, w * k, h * k);
-      // The mask rides with the layer: same rect, same rotation. Feather is
-      // already baked into it per-stroke, so no global blur here.
+      // The mask rides with the layer: same rect, same rotation, same flip.
+      // Feather is already baked into it per-stroke, so no global blur here.
       lctx.globalCompositeOperation = 'destination-in';
       lctx.drawImage(mask, (-w / 2) * k, (-h / 2) * k, w * k, h * k);
       lctx.restore();
@@ -1997,6 +2009,14 @@ const LayerStudioView: React.FC = () => {
     patchLayer(id, { scale: cover, rotation: 0, x: (dw - w) / 2, y: (dh - h) / 2 });
   };
 
+  /** Mirror a layer about its own center. Its mask flips with it. */
+  const flipLayer = (id: string, axis: 'x' | 'y') => {
+    const layer = layersRef.current.find(l => l.id === id);
+    if (!layer) return;
+    pushHistory();
+    patchLayer(id, axis === 'x' ? { flipX: !layer.flipX } : { flipY: !layer.flipY });
+  };
+
   /**
    * Set a layer's mask to a single opaque doc-space rectangle (crops the layer
    * to it). `geom` overrides the layer's stored transform for callers that are
@@ -2799,6 +2819,8 @@ const LayerStudioView: React.FC = () => {
             <div className="flex flex-wrap gap-2 pt-1">
               <MiniBtn onClick={() => resetTransform(active.id)}>Fit</MiniBtn>
               <MiniBtn onClick={() => fillDoc(active.id)}>Fill</MiniBtn>
+              <MiniBtn icon={<FlipHorizontal size={11} />} active={!!active.flipX} onClick={() => flipLayer(active.id, 'x')}>Flip H</MiniBtn>
+              <MiniBtn icon={<FlipVertical size={11} />} active={!!active.flipY} onClick={() => flipLayer(active.id, 'y')}>Flip V</MiniBtn>
               <MiniBtn onClick={() => invertMask(active.id)}>Invert mask</MiniBtn>
               <MiniBtn onClick={() => clearMask(active.id)}>Reset mask</MiniBtn>
             </div>
@@ -2993,10 +3015,12 @@ const AssetThumb = ({ img }: { img?: HTMLImageElement }) => (
   </span>
 );
 
-const MiniBtn = ({ children, onClick }: any) => (
+const MiniBtn = ({ children, icon, active, onClick }: any) => (
   <button onClick={onClick}
-    className="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded border border-border text-secondary hover:text-primary hover:border-accent transition-colors">
-    {children}
+    className={`flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded border transition-colors ${
+      active ? 'border-accent bg-accentDim text-accent' : 'border-border text-secondary hover:text-primary hover:border-accent'
+    }`}>
+    {icon}{children}
   </button>
 );
 
